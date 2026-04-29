@@ -25,8 +25,8 @@ jobs:
           python-version: "3.12"
 
       - name: Build Windows app
-        shell: cmd
-        run: build_windows_app.cmd
+        shell: pwsh
+        run: .\build_windows_app.ps1
 
       - name: Package Windows app
         shell: pwsh
