@@ -1,10 +1,5 @@
-# Depot CI Migration
-# Source: .github/workflows/windows-build.yml
-#
-# Changes made:
-# - Changed runs-on from "windows-latest" to "depot-ubuntu-latest" in job "build-windows"
-
 name: Build Windows App
+
 on:
   workflow_dispatch:
   push:
@@ -16,17 +11,21 @@ permissions:
   contents: write
 jobs:
   build-windows:
-    runs-on: depot-ubuntu-latest # was: windows-latest. Nonstandard GitHub runner label detected, changed to default Depot runner.
+    runs-on: depot-windows-latest
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Build Windows app
-        shell: cmd
-        run: build_windows_app.cmd
+        shell: pwsh
+        run: .\build_windows_app.ps1
+
       - name: Package Windows app
         shell: pwsh
         run: |
@@ -45,12 +44,14 @@ jobs:
           }
 
           Compress-Archive -Path (Join-Path $stagingDir "X Media Downloader") -DestinationPath $zipPath
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: xmd-windows-build
           path: dist/X-Media-Downloader-windows.zip
           retention-days: 30
+
       - name: Publish release asset for tags
         if: startsWith(github.ref, 'refs/tags/')
         env:
