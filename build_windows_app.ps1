@@ -69,7 +69,16 @@ function Resolve-BuildPython {
         }
     }
 
-    throw "No usable Python with tkinter support was found. Install Python plus tkinter, or set PYTHON_BIN."
+    throw @"
+No usable Python with tkinter support was found.
+
+Run this check on Windows:
+  py -3.12 -c "import tkinter as tk; root = tk.Tk(); root.withdraw(); print(root.tk.eval('info patchlevel')); root.destroy()"
+
+If that fails, install a regular Python build that includes Tcl/Tk support (the official python.org Windows installer is the safest option), or point the builder at a known-good interpreter:
+  set PYTHON_BIN=C:\Path\To\python.exe
+  build_windows_app.cmd
+"@
 }
 
 function Remove-IfExists {
