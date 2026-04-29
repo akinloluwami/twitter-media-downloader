@@ -114,8 +114,10 @@ class DownloaderApp:
         self.status_var = tk.StringVar(value="Ready.")
 
         self.build_ui()
+        self.profile_var.trace_add("write", self.on_profile_changed)
         self.load_settings()
         self.update_cookie_controls()
+        self.update_start_button_state()
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(100, self.poll_events)
@@ -263,7 +265,7 @@ class DownloaderApp:
         actions.grid(row=5, column=0, sticky="ew", pady=(12, 0))
         actions.columnconfigure(1, weight=1)
 
-        self.start_button = ttk.Button(actions, text="Start Download", command=self.start_download)
+        self.start_button = ttk.Button(actions, text="Start Download", command=self.start_download, state="disabled")
         self.start_button.grid(row=0, column=0, sticky="w")
         self.open_folder_button = ttk.Button(
             actions, text="Open Latest Folder", command=self.open_latest_folder, state="disabled"
@@ -319,6 +321,13 @@ class DownloaderApp:
             self.cookies_row.grid(row=0, column=0, sticky="ew")
         else:
             self.cookies_row.grid_remove()
+
+    def on_profile_changed(self, *_args: object) -> None:
+        self.update_start_button_state()
+
+    def update_start_button_state(self) -> None:
+        is_ready = bool(self.profile_var.get().strip()) and not self.running
+        self.start_button.configure(state="normal" if is_ready else "disabled")
 
     def clear_log(self) -> None:
         self.log_text.configure(state="normal")
@@ -424,8 +433,8 @@ class DownloaderApp:
         self.clear_log()
         self.append_log(f"[gui] starting download for {self.profile_var.get().strip()}")
         self.status_var.set("Downloading...")
-        self.start_button.configure(state="disabled")
         self.running = True
+        self.update_start_button_state()
 
         self.worker = threading.Thread(
             target=self.run_download_worker,
@@ -494,7 +503,7 @@ class DownloaderApp:
 
         self.running = False
         self.status_var.set(status_message)
-        self.start_button.configure(state="normal")
+        self.update_start_button_state()
 
         if isinstance(target_dir, Path) and target_dir.exists():
             self.open_folder_button.configure(state="normal")
