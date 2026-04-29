@@ -13,12 +13,32 @@ function Test-TkPython {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Exe,
-        [string[]]$Args = @()
+        [string[]]$PythonArgs = @()
     )
 
     $probe = 'import tkinter as tk; root = tk.Tk(); root.withdraw(); print(root.tk.eval("info patchlevel")); root.destroy()'
-    & $Exe @Args -c $probe *> $null
-    return $LASTEXITCODE -eq 0
+    $commandArgs = @($PythonArgs + @("-c", $probe))
+    $previousErrorActionPreference = $ErrorActionPreference
+    $hadNativePreference = Test-Path variable:PSNativeCommandUseErrorActionPreference
+    if ($hadNativePreference) {
+        $previousNativePreference = $PSNativeCommandUseErrorActionPreference
+    }
+
+    try {
+        $ErrorActionPreference = "Continue"
+        if ($hadNativePreference) {
+            $PSNativeCommandUseErrorActionPreference = $false
+        }
+        & $Exe @commandArgs *> $null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($hadNativePreference) {
+            $PSNativeCommandUseErrorActionPreference = $previousNativePreference
+        }
+    }
 }
 
 function Resolve-BuildPython {
@@ -44,7 +64,7 @@ function Resolve-BuildPython {
         if (-not (Get-Command $candidate.Exe -ErrorAction SilentlyContinue)) {
             continue
         }
-        if (Test-TkPython -Exe $candidate.Exe -Args $candidate.Args) {
+        if (Test-TkPython -Exe $candidate.Exe -PythonArgs $candidate.Args) {
             return $candidate
         }
     }
@@ -63,6 +83,35 @@ function Remove-IfExists {
     }
 }
 
+function Ensure-WindowsIcon {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PythonExe
+    )
+
+    if (Test-Path $iconIcoPath) {
+        return $iconIcoPath
+    }
+
+    if (-not (Test-Path $iconPngPath)) {
+        return $null
+    }
+
+    $iconBuilder = @"
+from pathlib import Path
+from PIL import Image
+
+source = Path(r"$iconPngPath")
+target = Path(r"$iconIcoPath")
+image = Image.open(source).convert("RGBA")
+sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+image.save(target, format="ICO", sizes=sizes)
+"@
+
+    & $PythonExe -c $iconBuilder
+    return $iconIcoPath
+}
+
 $buildPython = Resolve-BuildPython
 Write-Host "Using build Python: $($buildPython.Display)"
 
@@ -75,12 +124,7 @@ $buildVenvPython = Join-Path $buildVenvDir "Scripts\python.exe"
 & $buildVenvPython -m pip install --upgrade pip
 & $buildVenvPython -m pip install --upgrade pyinstaller pillow
 
-$iconPath = $null
-if (Test-Path $iconIcoPath) {
-    $iconPath = $iconIcoPath
-} elseif (Test-Path $iconPngPath) {
-    $iconPath = $iconPngPath
-}
+$iconPath = Ensure-WindowsIcon -PythonExe $buildVenvPython
 
 $pyinstallerArgs = @(
     "-m", "PyInstaller",
