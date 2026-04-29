@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+downloads/
+.build-venv/
+.build-venv-windows/
+build/
+build-windows/
+dist/
+*.spec
