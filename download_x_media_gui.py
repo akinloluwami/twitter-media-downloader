@@ -107,6 +107,7 @@ class DownloaderApp:
         self.include_retweets_var = tk.BooleanVar(value=False)
         self.include_quoted_var = tk.BooleanVar(value=False)
         self.exclude_pinned_var = tk.BooleanVar(value=False)
+        self.organize_media_var = tk.BooleanVar(value=True)
         self.write_info_json_var = tk.BooleanVar(value=False)
         self.verify_auth_var = tk.BooleanVar(value=False)
         self.dry_run_var = tk.BooleanVar(value=False)
@@ -225,29 +226,32 @@ class DownloaderApp:
             options, text="Exclude pinned tweet", variable=self.exclude_pinned_var
         ).grid(row=0, column=2, sticky="w")
         ttk.Checkbutton(
-            options, text="Write info JSON files", variable=self.write_info_json_var
+            options, text="Separate into images and videos", variable=self.organize_media_var
         ).grid(row=1, column=0, sticky="w", pady=(8, 0))
         ttk.Checkbutton(
-            options, text="Verify auth before download", variable=self.verify_auth_var
+            options, text="Write info JSON files", variable=self.write_info_json_var
         ).grid(row=1, column=1, sticky="w", pady=(8, 0))
         ttk.Checkbutton(
-            options, text="Dry run only", variable=self.dry_run_var
+            options, text="Verify auth before download", variable=self.verify_auth_var
         ).grid(row=1, column=2, sticky="w", pady=(8, 0))
         ttk.Checkbutton(
-            options, text="Skip tool bootstrap", variable=self.skip_bootstrap_var
+            options, text="Dry run only", variable=self.dry_run_var
         ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+        ttk.Checkbutton(
+            options, text="Skip tool bootstrap", variable=self.skip_bootstrap_var
+        ).grid(row=2, column=1, sticky="w", pady=(8, 0))
 
-        ttk.Label(options, text="Concurrency").grid(row=3, column=0, sticky="w", pady=(12, 0))
-        ttk.Label(options, text="Retries").grid(row=3, column=1, sticky="w", pady=(12, 0))
-        ttk.Label(options, text="Timeout (seconds)").grid(row=3, column=2, sticky="w", pady=(12, 0))
+        ttk.Label(options, text="Concurrency").grid(row=4, column=0, sticky="w", pady=(12, 0))
+        ttk.Label(options, text="Retries").grid(row=4, column=1, sticky="w", pady=(12, 0))
+        ttk.Label(options, text="Timeout (seconds)").grid(row=4, column=2, sticky="w", pady=(12, 0))
         ttk.Entry(options, textvariable=self.concurrency_var, width=10).grid(
-            row=4, column=0, sticky="w"
+            row=5, column=0, sticky="w"
         )
         ttk.Entry(options, textvariable=self.retries_var, width=10).grid(
-            row=4, column=1, sticky="w"
+            row=5, column=1, sticky="w"
         )
         ttk.Entry(options, textvariable=self.timeout_var, width=10).grid(
-            row=4, column=2, sticky="w"
+            row=5, column=2, sticky="w"
         )
 
         log_frame = ttk.LabelFrame(container, text="Activity", padding=12)
@@ -402,6 +406,8 @@ class DownloaderApp:
             args.append("--include-quoted")
         if self.exclude_pinned_var.get():
             args.append("--exclude-pinned")
+        if not self.organize_media_var.get():
+            args.append("--no-organize-media")
         if self.write_info_json_var.get():
             args.append("--write-info-json")
         if self.verify_auth_var.get():
@@ -533,6 +539,7 @@ class DownloaderApp:
                 "include_retweets": self.include_retweets_var.get(),
                 "include_quoted": self.include_quoted_var.get(),
                 "exclude_pinned": self.exclude_pinned_var.get(),
+                "organize_media": self.organize_media_var.get(),
                 "write_info_json": self.write_info_json_var.get(),
                 "verify_auth": self.verify_auth_var.get(),
                 "dry_run": self.dry_run_var.get(),
@@ -565,6 +572,7 @@ class DownloaderApp:
         self.include_retweets_var.set(bool(payload.get("include_retweets", False)))
         self.include_quoted_var.set(bool(payload.get("include_quoted", False)))
         self.exclude_pinned_var.set(bool(payload.get("exclude_pinned", False)))
+        self.organize_media_var.set(bool(payload.get("organize_media", True)))
         self.write_info_json_var.set(bool(payload.get("write_info_json", False)))
         self.verify_auth_var.set(bool(payload.get("verify_auth", False)))
         self.dry_run_var.set(bool(payload.get("dry_run", False)))
