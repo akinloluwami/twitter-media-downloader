@@ -73,6 +73,7 @@ COOKIE_DB_MISSING_MARKERS = (
     "cookies database",
 )
 SUMMARY_FILENAME = "download-summary.json"
+IMAGES_SUBDIR = "images"
 VIDEOS_SUBDIR = "videos"
 DOWNLOAD_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -166,6 +167,12 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_VENV_DIR,
         help="Local virtualenv used for gallery-dl/yt-dlp if bootstrapping is needed",
+    )
+    parser.add_argument(
+        "--organize-media",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Place media into images/ and videos/ subfolders (default: %(default)s)",
     )
     parser.add_argument(
         "--skip-bootstrap",
@@ -440,34 +447,59 @@ def ensure_unique_path(path: Path) -> Path:
         counter += 1
 
 
-def organize_video_files(root: Path) -> list[str]:
+def media_subdir_for_extension(extension: str) -> str | None:
+    if extension in IMAGE_EXTENSIONS:
+        return IMAGES_SUBDIR
+    if extension in VIDEO_EXTENSIONS:
+        return VIDEOS_SUBDIR
+    return None
+
+
+def reconcile_media_layout(root: Path, organize_media: bool) -> list[str]:
     if not root.exists():
         return []
 
-    videos_dir = root / VIDEOS_SUBDIR
     moved_paths: list[str] = []
 
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
-        if path.suffix.lower() not in VIDEO_EXTENSIONS:
-            continue
-        if videos_dir in path.parents:
+        extension = path.suffix.lower()
+        target_subdir = media_subdir_for_extension(extension)
+        if target_subdir is None:
             continue
 
-        videos_dir.mkdir(parents=True, exist_ok=True)
-        destination = ensure_unique_path(videos_dir / path.name)
+        destination_dir = root
+        if organize_media:
+            destination_dir = root / target_subdir
+            if destination_dir in path.parents:
+                continue
+        elif path.parent == root:
+            continue
+
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        destination = ensure_unique_path(destination_dir / path.name)
         shutil.move(str(path), str(destination))
         moved_paths.append(str(destination.relative_to(root)))
+
+    for directory_name in (IMAGES_SUBDIR, VIDEOS_SUBDIR):
+        directory = root / directory_name
+        if directory.exists():
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
 
     return moved_paths
 
 
-def target_path_for_media(root: Path, metadata: dict[str, object]) -> Path:
+def target_path_for_media(root: Path, metadata: dict[str, object], organize_media: bool) -> Path:
     extension = str(metadata["extension"]).lower()
     filename = f"{metadata['tweet_id']}_{metadata['num']}.{extension}"
-    if f".{extension}" in VIDEO_EXTENSIONS:
-        return root / VIDEOS_SUBDIR / filename
+    if organize_media:
+        target_subdir = media_subdir_for_extension(f".{extension}")
+        if target_subdir:
+            return root / target_subdir / filename
     return root / filename
 
 
@@ -764,7 +796,7 @@ def download_media_item(
 ) -> str:
     metadata = item["metadata"]
     url = str(item["url"])
-    destination = target_path_for_media(target_dir, metadata)
+    destination = target_path_for_media(target_dir, metadata, args.organize_media)
     destination.parent.mkdir(parents=True, exist_ok=True)
     last_error: Exception | None = None
 
@@ -833,7 +865,7 @@ def download_media_items(
             continue
         seen_keys.add(archive_key)
 
-        destination = target_path_for_media(target_dir, metadata)
+        destination = target_path_for_media(target_dir, metadata, args.organize_media)
         if archive_key in archive_keys or destination.exists():
             skipped += 1
             continue
@@ -876,7 +908,9 @@ def download_media_items(
         for future in as_completed(futures):
             item = futures[future]
             metadata = item["metadata"]
-            relative_path = str(target_path_for_media(target_dir, metadata).relative_to(target_dir))
+            relative_path = str(
+                target_path_for_media(target_dir, metadata, args.organize_media).relative_to(target_dir)
+            )
             with progress_lock:
                 completed += 1
                 progress = f"{completed}/{total}"
@@ -974,10 +1008,11 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     target_dir = args.output_dir.expanduser().resolve() / handle
     target_dir.mkdir(parents=True, exist_ok=True)
-    initial_moves = organize_video_files(target_dir)
+    initial_moves = reconcile_media_layout(target_dir, args.organize_media)
     if initial_moves:
+        destination_label = f"{IMAGES_SUBDIR}/ and {VIDEOS_SUBDIR}/" if args.organize_media else "the root folder"
         print(
-            f"[organize] moved {len(initial_moves)} existing video file(s) into {VIDEOS_SUBDIR}/",
+            f"[organize] moved {len(initial_moves)} existing media file(s) into {destination_label}",
             file=sys.stderr,
         )
     before_stats = collect_media_stats(target_dir)
@@ -1151,10 +1186,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     download_exit_code = int(download_result["exit_code"])
     finished_at = datetime.now().astimezone()
     duration_seconds = time.monotonic() - started_timer
-    moved_videos = organize_video_files(target_dir)
-    if moved_videos:
+    moved_media = reconcile_media_layout(target_dir, args.organize_media)
+    if moved_media:
+        destination_label = f"{IMAGES_SUBDIR}/ and {VIDEOS_SUBDIR}/" if args.organize_media else "the root folder"
         print(
-            f"[organize] moved {len(moved_videos)} video file(s) into {VIDEOS_SUBDIR}/",
+            f"[organize] moved {len(moved_media)} media file(s) into {destination_label}",
             file=sys.stderr,
         )
     after_stats = collect_media_stats(target_dir)
